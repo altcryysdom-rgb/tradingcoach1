@@ -1,0 +1,6 @@
+{
+  "name": "Diario de Trading Futuros MNQ & MGC",
+  "description": "Diario de trading profesional, privado y gratuito para futuros MNQ y MGC con soporte para hasta 6 entradas por operación, cálculo de precio ponderado, R múltiple, analítica y psicología.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

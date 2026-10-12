@@ -1,0 +1,251 @@
+{
+  "entities": {
+    "Trade": {
+      "title": "Trade",
+      "description": "A single trading operation for MNQ or MGC with up to 6 scale-in entries, weighted average price, risk, and psychology notes",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique trade ID formatted like TRD-YYYYMMDD-XXX",
+          "maxLength": 64
+        },
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner",
+          "maxLength": 128
+        },
+        "date": {
+          "type": "string",
+          "description": "Trade entry date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "time": {
+          "type": "string",
+          "description": "Trade entry time (HH:MM)",
+          "maxLength": 10
+        },
+        "instrument": {
+          "type": "string",
+          "description": "Instrument symbol (MNQ or MGC)",
+          "enum": ["MNQ", "MGC"]
+        },
+        "direction": {
+          "type": "string",
+          "description": "Position direction (LONG or SHORT)",
+          "enum": ["LONG", "SHORT"]
+        },
+        "status": {
+          "type": "string",
+          "description": "Current status of the trade",
+          "enum": ["ABIERTA", "CERRADA"]
+        },
+        "entries": {
+          "type": "array",
+          "description": "Up to 6 scale-in entries with contract size and price"
+        },
+        "totalContracts": {
+          "type": "number",
+          "description": "Cumulative contracts across all entries"
+        },
+        "weightedAvgPrice": {
+          "type": "number",
+          "description": "Weighted average entry price"
+        },
+        "initialStop": {
+          "type": "number",
+          "description": "Initial stop loss level"
+        },
+        "currentStop": {
+          "type": "number",
+          "description": "Trailing or current stop loss level"
+        },
+        "takeProfit": {
+          "type": "number",
+          "description": "Take profit target price"
+        },
+        "exitPrice": {
+          "type": "number",
+          "description": "Actual exit price"
+        },
+        "exitDate": {
+          "type": "string",
+          "description": "Exit date",
+          "maxLength": 10
+        },
+        "exitTime": {
+          "type": "string",
+          "description": "Exit time",
+          "maxLength": 10
+        },
+        "commissions": {
+          "type": "number",
+          "description": "Total commissions in USD"
+        },
+        "grossPoints": {
+          "type": "number",
+          "description": "Gross points won or lost"
+        },
+        "grossPnL": {
+          "type": "number",
+          "description": "Gross PnL in USD"
+        },
+        "netPnL": {
+          "type": "number",
+          "description": "Net PnL in USD after commissions"
+        },
+        "initialRiskPoints": {
+          "type": "number",
+          "description": "Initial risk in points"
+        },
+        "initialRiskDollars": {
+          "type": "number",
+          "description": "Initial risk in USD"
+        },
+        "rMultiple": {
+          "type": "number",
+          "description": "R-multiple achieved (Net PnL / Initial Risk)"
+        },
+        "outcome": {
+          "type": "string",
+          "description": "Trade outcome",
+          "enum": ["GANADORA", "PERDEDORA", "BREAKEVEN"]
+        },
+        "session": {
+          "type": "string",
+          "description": "Trading session name",
+          "maxLength": 64
+        },
+        "strategy": {
+          "type": "string",
+          "description": "Strategy or setup executed",
+          "maxLength": 100
+        },
+        "emotionsBefore": {
+          "type": "array",
+          "description": "Emotions felt before entering the trade"
+        },
+        "emotionsDuring": {
+          "type": "array",
+          "description": "Emotions felt while in the position"
+        },
+        "emotionsAfter": {
+          "type": "array",
+          "description": "Emotions felt after exiting"
+        },
+        "disciplineScore": {
+          "type": "number",
+          "description": "Discipline rating from 1 to 5"
+        },
+        "mistakes": {
+          "type": "array",
+          "description": "Execution or psychological mistakes"
+        },
+        "lessons": {
+          "type": "string",
+          "description": "Lessons learned from this trade",
+          "maxLength": 2000
+        },
+        "screenshotUrl": {
+          "type": "string",
+          "description": "Optional chart screenshot URL",
+          "maxLength": 500
+        },
+        "photos": {
+          "type": "object",
+          "description": "Trade screenshots: 1M before entry, 1M after close, and HTF (15M/1H) market context"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional trade notes",
+          "maxLength": 2000
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp ISO string"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp ISO string"
+        }
+      },
+      "required": ["id", "userId", "instrument", "direction", "status", "entries", "totalContracts", "weightedAvgPrice", "commissions"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User preferences and point values for futures instruments",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID",
+          "maxLength": 128
+        },
+        "instruments": {
+          "type": "object",
+          "description": "Configured point values and tick sizes for instruments"
+        },
+        "privacyMode": {
+          "type": "boolean",
+          "description": "Whether financial values are masked"
+        },
+        "csvDelimiter": {
+          "type": "string",
+          "description": "CSV export delimiter (; or ,)",
+          "maxLength": 2
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Update timestamp"
+        }
+      },
+      "required": ["userId"]
+    },
+    "WeeklyReport": {
+      "title": "WeeklyReport",
+      "description": "Weekly trading report generated by Trading Coach",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique report ID",
+          "maxLength": 64
+        },
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID",
+          "maxLength": 128
+        },
+        "weekLabel": {
+          "type": "string",
+          "description": "Week title or date range",
+          "maxLength": 100
+        },
+        "content": {
+          "type": "string",
+          "description": "Full markdown text of the report",
+          "maxLength": 20000
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["id", "userId", "content"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/trades/{tradeId}": {
+      "schema": { "$ref": "Trade" },
+      "description": "Private collection of trades owned exclusively by the authenticated user"
+    },
+    "/users/{userId}/settings/{settingId}": {
+      "schema": { "$ref": "UserSettings" },
+      "description": "Private user preferences and point values"
+    },
+    "/users/{userId}/reports/{reportId}": {
+      "schema": { "$ref": "WeeklyReport" },
+      "description": "Private weekly performance reports generated for this user"
+    }
+  }
+}

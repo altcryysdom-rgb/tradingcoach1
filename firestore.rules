@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    function isValidTrade(data, userId) {
+      return data.userId == userId
+        && data.id is string && data.id.size() <= 64
+        && (data.instrument == 'MNQ' || data.instrument == 'MGC')
+        && (data.direction == 'LONG' || data.direction == 'SHORT')
+        && (data.status == 'ABIERTA' || data.status == 'CERRADA')
+        && data.entries is list && data.entries.size() <= 6
+        && data.totalContracts is number && data.totalContracts > 0
+        && data.weightedAvgPrice is number && data.weightedAvgPrice > 0
+        && data.commissions is number && data.commissions >= 0;
+    }
+
+    function isValidSettings(data, userId) {
+      return data.userId == userId;
+    }
+
+    function isValidReport(data, userId) {
+      return data.userId == userId
+        && data.id is string && data.id.size() <= 64
+        && data.content is string && data.content.size() <= 25000;
+    }
+
+    // Trades subcollection under user
+    match /users/{userId}/trades/{tradeId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidId(tradeId) && isValidTrade(request.resource.data, userId);
+      allow update: if isOwner(userId) && isValidId(tradeId) && isValidTrade(request.resource.data, userId);
+      allow delete: if isOwner(userId) && isValidId(tradeId);
+    }
+
+    // User settings
+    match /users/{userId}/settings/{settingId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidId(settingId) && isValidSettings(request.resource.data, userId);
+      allow delete: if isOwner(userId) && isValidId(settingId);
+    }
+
+    // Trading reports
+    match /users/{userId}/reports/{reportId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidId(reportId) && isValidReport(request.resource.data, userId);
+      allow delete: if isOwner(userId) && isValidId(reportId);
+    }
+  }
+}
