@@ -72,7 +72,8 @@ export default function App() {
               setTrades(cleanTrades);
               saveTradesToStorage(cleanTrades);
               if (cleanTrades.length !== remoteTrades.length) {
-                void syncLocalTradesToFirestore(currentUser.uid, cleanTrades).catch((err) =>
+                const staleSamples = remoteTrades.filter((trade) => sampleIds.has(trade.id));
+                void Promise.all(staleSamples.map((trade) => deleteTradeFromFirestore(currentUser.uid, trade.id))).catch((err) =>
                   console.error('No se pudieron purgar operaciones ficticias de la nube:', err)
                 );
               }
@@ -235,10 +236,15 @@ export default function App() {
     try {
       // Primero sincronizar el borrado con Firestore para evitar que el listener
       // vuelva a insertar operaciones antiguas en el estado local.
-      if (user) await syncLocalTradesToFirestore(user.uid, []);
+      if (user) {
+        await syncLocalTradesToFirestore(user.uid, []);
+      }
       saveTradesToStorage([]);
       setTrades([]);
       setCurrentTab('dashboard');
+      if (!user) {
+        alert('Se borraron las operaciones de este navegador. Para borrar también los datos de Firebase, inicia sesión con tu cuenta de Google y vuelve a usar “Limpiar Diario”.');
+      }
     } catch (err) {
       console.error('No se pudieron borrar todas las operaciones:', err);
       alert('No se pudieron borrar las operaciones de la nube. Inténtalo de nuevo.');
