@@ -512,13 +512,13 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
           <span>3. Mantenimiento del diario</span>
         </h2>
         <p className="text-[11px] text-slate-500 max-w-lg">
-          El diario empieza vacío, sin operaciones ficticias. Puedes borrar las operaciones del navegador y de la nube para comenzar desde cero.
+          El diario empieza vacío, sin operaciones ficticias. Si has iniciado sesión, puedes borrar las operaciones del navegador y de Firebase; sin sesión, solo se borrará el navegador.
         </p>
         <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div>
             <h3 className="text-xs font-bold text-rose-700">Borrar todas las operaciones</h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Elimina las operaciones de esta cuenta en el navegador y en Firebase.
+              Elimina las operaciones del navegador y, si has iniciado sesión, también de Firebase.
             </p>
           </div>
           <button
@@ -543,7 +543,7 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
                   ¿Borrar todas las operaciones?
                 </h3>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Esta acción eliminará todas las operaciones registradas para comenzar el diario desde cero. Asegúrate de haber descargado una copia de seguridad JSON previamente si deseas conservar tus datos.
+                  Esta acción elimina las operaciones locales y, si has iniciado sesión, las de Firebase. No hay operaciones reales que conservar; si en el futuro guardas datos importantes, descarga antes una copia de seguridad.
                 </p>
               </div>
             </div>
