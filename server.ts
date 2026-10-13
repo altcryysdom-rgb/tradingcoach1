@@ -13,6 +13,25 @@ const PORT = 3000;
 app.use(express.json({ limit: '24mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
+// Cheap pre-authentication rate limit so random requests cannot hammer Firebase token verification.
+const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_RATE_LIMIT = 60;
+const authRequestCounts = new Map<string, { count: number; resetAt: number }>();
+app.use('/api/coach', (req, res, next) => {
+  const now = Date.now();
+  const key = req.ip || req.socket.remoteAddress || 'unknown';
+  let entry = authRequestCounts.get(key);
+  if (!entry || entry.resetAt <= now) entry = { count: 0, resetAt: now + AUTH_RATE_WINDOW_MS };
+  entry.count += 1;
+  authRequestCounts.set(key, entry);
+  if (entry.count > AUTH_RATE_LIMIT) {
+    res.setHeader('Retry-After', String(Math.ceil((entry.resetAt - now) / 1000)));
+    res.status(429).json({ error: 'Demasiadas solicitudes. Espera unos minutos e inténtalo de nuevo.' });
+    return;
+  }
+  next();
+});
+
 // Verify Firebase ID tokens before allowing access to Gemini-backed endpoints.
 app.use('/api/coach', async (req, res, next) => {
   const authorization = req.header('authorization') || '';
