@@ -1150,7 +1150,46 @@ export const TradingCoach: React.FC<TradingCoachProps> = ({
           </div>
         )}
 
+        {/* Pending images selected for the chatbot */}
+        {pendingChatImages.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {pendingChatImages.map((img, index) => (
+              <div key={`${img.name || img.label}-${index}`} className="relative w-20 h-20 rounded-lg overflow-hidden border border-slate-300 bg-slate-50">
+                <img src={img.dataUrl} alt={img.name || img.label || 'Imagen adjunta'} className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => handleRemovePendingImage(index)}
+                  title="Quitar imagen"
+                  aria-label="Quitar imagen adjunta"
+                  className="absolute top-1 right-1 rounded-full bg-slate-900/80 text-white p-1 hover:bg-slate-900"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="hidden"
+          onChange={handleFileSelected}
+          aria-label="Seleccionar imagen para adjuntar"
+        />
+
         <div className="flex items-end gap-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isLoading}
+            title="Adjuntar imagen o captura del gráfico"
+            aria-label="Adjuntar imagen al chatbot"
+            className="p-2.5 rounded-xl border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer shrink-0 disabled:opacity-40"
+          >
+            <Paperclip className="w-4 h-4" />
+          </button>
           <textarea
             rows={2}
             value={inputText}
@@ -1195,7 +1234,7 @@ export const TradingCoach: React.FC<TradingCoachProps> = ({
           <button
             type="button"
             onClick={() => handleSendMessage()}
-            disabled={!inputText.trim() || isLoading}
+            disabled={(!inputText.trim() && pendingChatImages.length === 0) || isLoading}
             className="p-2.5 rounded-xl bg-[#0f1f38] hover:bg-[#1a365d] text-white font-bold transition-colors cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
           >
             <Send className="w-4 h-4" />
