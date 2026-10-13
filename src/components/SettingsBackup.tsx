@@ -220,7 +220,7 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
                 Inicia sesión para sincronizar entre tu Computadora y tu Celular
               </h3>
               <p className="text-[11px] text-slate-500 mt-1 max-w-lg">
-                Conecta tu cuenta de Google para sincronizar el diario con Firebase Firestore. Al iniciar sesión, la lista de la nube reemplaza el caché local; la sincronización manual reemplaza la colección completa.
+                Conecta tu cuenta de Google para sincronizar el diario con Firebase Firestore. Al iniciar sesión, la lista de la nube reemplaza el caché local; la sincronización manual agrega o actualiza operaciones sin borrar las que solo estén en Firebase.
               </p>
             </div>
             {onSignIn && (
@@ -543,7 +543,7 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
                   ¿Borrar todas las operaciones?
                 </h3>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Esta acción elimina las operaciones locales y, si has iniciado sesión, las de Firebase. No hay operaciones reales que conservar; si en el futuro guardas datos importantes, descarga antes una copia de seguridad.
+                  Esta acción elimina todas las operaciones locales y, si has iniciado sesión, también las operaciones y capturas guardadas en Firebase. No se puede deshacer. Descarga una copia de seguridad antes de continuar.
                 </p>
               </div>
             </div>
