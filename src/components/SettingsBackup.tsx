@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Settings, Trade, InstrumentConfig } from '../types/trade';
-import { exportBackupJSON, parseBackupJSON, INITIAL_SAMPLE_TRADES } from '../utils/storage';
+import { exportBackupJSON, parseBackupJSON } from '../utils/storage';
 import {
   Settings as SettingsIcon,
   Download,
@@ -222,7 +222,7 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
                 Inicia sesión para sincronizar entre tu Computadora y tu Celular
               </h3>
               <p className="text-[11px] text-slate-500 mt-1 max-w-lg">
-                Conecta tu cuenta de Google para guardar tus operaciones en Firebase Firestore de forma privada. Tus operaciones actuales no se borrarán; se subirán automáticamente.
+                Conecta tu cuenta de Google para sincronizar el diario con Firebase Firestore. Al iniciar sesión, la lista de la nube reemplaza el caché local; la sincronización manual reemplaza la colección completa.
               </p>
             </div>
             {onSignIn && (
@@ -507,38 +507,20 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
         </div>
       </div>
 
-      {/* 3. Sample Data & Reset */}
+      {/* 3. Journal Maintenance */}
       <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
         <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2 pb-2 border-b border-slate-100">
           <RotateCcw className="w-4 h-4 text-slate-500" />
-          <span>3. Datos de Prueba y Mantenimiento</span>
+          <span>3. Mantenimiento del diario</span>
         </h2>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-xs font-bold text-slate-800">
-              Cargar Operaciones de Ejemplo Verificadas
-            </h3>
-            <p className="text-[11px] text-slate-500 mt-0.5 max-w-lg">
-              Carga 4 operaciones de muestra (Long, Short, escala de 3 entradas, stops y take profits) para explorar las métricas.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onResetToSampleTrades}
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-xs font-semibold text-slate-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap shadow-2xs"
-          >
-            Cargar Datos de Muestra
-          </button>
-        </div>
-
+        <p className="text-[11px] text-slate-500 max-w-lg">
+          El diario empieza vacío, sin operaciones ficticias. Puedes borrar las operaciones del navegador y de la nube para comenzar desde cero.
+        </p>
         <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-xs font-bold text-rose-700">
-              Borrar Todas las Operaciones
-            </h3>
+            <h3 className="text-xs font-bold text-rose-700">Borrar todas las operaciones</h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Elimina todas las operaciones del navegador para comenzar un diario desde cero.
+              Elimina las operaciones de esta cuenta en el navegador y en Firebase.
             </p>
           </div>
           <button
@@ -550,7 +532,6 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
           </button>
         </div>
       </div>
-
       {/* Confirmation Modal to Clear All Trades */}
       {showClearModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
