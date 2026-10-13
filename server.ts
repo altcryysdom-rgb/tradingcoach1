@@ -168,7 +168,7 @@ async function parseImageToInlinePart(img: any): Promise<ParsedImagePart | null>
     }
 
     if (!base64Data) return null;
-    base64Data = base64Data.replace(/\\s/g, '');
+    base64Data = base64Data.replace(/\s/g, '');
     if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType.toLowerCase())) return null;
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64Data)) return null;
     const decodedBytes = Buffer.from(base64Data, 'base64');
