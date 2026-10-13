@@ -3,6 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
+import firebaseConfig from './firebase-applet-config.json';
 
 dotenv.config();
 
@@ -12,9 +13,44 @@ const PORT = 3000;
 app.use(express.json({ limit: '24mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// Limit public AI endpoints to reduce accidental loops and abuse of the Gemini quota.
-// This in-memory limiter resets on server restart; production deployments should also
-// enforce limits at the hosting/proxy layer and authenticate requests.
+// Verify Firebase ID tokens before allowing access to Gemini-backed endpoints.
+app.use('/api/coach', async (req, res, next) => {
+  const authorization = req.header('authorization') || '';
+  const tokenMatch = authorization.match(/^Bearer\s+(.+)$/i);
+  if (!tokenMatch || !firebaseConfig.apiKey) {
+    res.status(401).json({ error: 'Inicia sesión con Google para utilizar las funciones de IA.' });
+    return;
+  }
+
+  try {
+    const verifyResponse = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(firebaseConfig.apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: tokenMatch[1] }),
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    if (!verifyResponse.ok) {
+      res.status(401).json({ error: 'La sesión no es válida o ha expirado. Inicia sesión de nuevo.' });
+      return;
+    }
+    const verified = await verifyResponse.json() as { users?: Array<{ localId?: string }> };
+    if (!verified.users?.[0]?.localId) {
+      res.status(401).json({ error: 'No se pudo verificar la sesión de Firebase.' });
+      return;
+    }
+    (req as Request & { firebaseUid?: string }).firebaseUid = verified.users[0].localId;
+    next();
+  } catch (error) {
+    console.error('Firebase token verification failed:', error);
+    res.status(503).json({ error: 'No se pudo verificar la sesión. Inténtalo de nuevo.' });
+  }
+});
+
+// Per-IP rate limiting reduces accidental loops and abuse of the Gemini quota.
+// Also enforce limits at the hosting/proxy layer in production.
 const COACH_RATE_WINDOW_MS = 15 * 60 * 1000;
 const COACH_RATE_LIMIT = 30;
 const coachRequestCounts = new Map<string, { count: number; resetAt: number }>();
@@ -39,7 +75,6 @@ app.use('/api/coach', (req, res, next) => {
     res.status(429).json({ error: 'Demasiadas solicitudes al Coach. Espera unos minutos e inténtalo de nuevo.' });
     return;
   }
-  coachRequestCounts.set(key, entry);
   next();
 });
 
