@@ -42,9 +42,9 @@ export default function App() {
     () => settings.privacyMode || false
   );
 
-  // Operaciones locales que todavía no están en la nube. Se conservan hasta
-  // que el usuario decida sincronizarlas, sin subirlas automáticamente.
-  const pendingLocalTradesRef = useRef<Trade[] | null>(null);
+  // Solo recordamos IDs que ya vimos en Firebase; no mantenemos una segunda
+  // lista de operaciones. El estado "trades" sigue siendo el único historial visible. 
+  const knownCloudTradeIdsRef = useRef<Set<string>>(new Set());
 
   // Sync trades to local storage on changes as a permanent offline cache
   useEffect(() => {
@@ -63,11 +63,9 @@ export default function App() {
     const unsubscribeAuth = subscribeToAuth(async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Capturar antes de que el primer snapshot remoto reemplace el estado.
-        // No mezclar operaciones pertenecientes a otra cuenta.
-        pendingLocalTradesRef.current = loadTradesFromStorage().filter(
-          (trade) => !trade.userId || trade.userId === currentUser.uid
-        );
+        // Conservamos el historial local mientras llega la primera respuesta de Firebase.
+        // No se mantiene una segunda lista de operaciones.
+        knownCloudTradeIdsRef.current = new Set();
         setIsSyncing(true);
         try {
           await testConnection();
@@ -81,13 +79,21 @@ export default function App() {
               const sampleIds = new Set<string>(LEGACY_SAMPLE_TRADE_IDS);
               const cleanTrades = remoteTrades.filter((trade) => !sampleIds.has(trade.id));
               const remoteIds = new Set(cleanTrades.map((trade) => trade.id));
-              const pending = (pendingLocalTradesRef.current || []).filter(
-                (trade) => !remoteIds.has(trade.id)
-              );
-              pendingLocalTradesRef.current = pending;
-              const visibleTrades = [...cleanTrades, ...pending];
-              setTrades(visibleTrades);
-              saveTradesToStorage(visibleTrades);
+              setTrades((previousTrades) => {
+                // Conservar operaciones que solo existen localmente; no duplicar IDs.
+                // Si una operación ya estaba en Firebase y luego se borró allí,
+                // no volver a incorporarla desde la caché en los siguientes snapshots.
+                const localOnlyTrades = previousTrades.filter(
+                  (trade) =>
+                    !remoteIds.has(trade.id) &&
+                    !knownCloudTradeIdsRef.current.has(trade.id) &&
+                    (!trade.userId || trade.userId === currentUser.uid)
+                );
+                const visibleTrades = [...cleanTrades, ...localOnlyTrades];
+                knownCloudTradeIdsRef.current = remoteIds;
+                saveTradesToStorage(visibleTrades);
+                return visibleTrades;
+              });
               if (cleanTrades.length !== remoteTrades.length) {
                 const staleSamples = remoteTrades.filter((trade) => sampleIds.has(trade.id));
                 void Promise.all(staleSamples.map((trade) => deleteTradeFromFirestore(currentUser.uid, trade.id))).catch((err) =>
@@ -106,7 +112,7 @@ export default function App() {
           setIsSyncing(false);
         }
       } else {
-        pendingLocalTradesRef.current = null;
+        knownCloudTradeIdsRef.current = new Set();
         if (unsubscribeTrades) {
           unsubscribeTrades();
           unsubscribeTrades = null;
@@ -258,7 +264,7 @@ export default function App() {
         await syncLocalTradesToFirestore(user.uid, []);
         await deleteAllTradePhotosFromStorage(user.uid);
       }
-      pendingLocalTradesRef.current = [];
+      knownCloudTradeIdsRef.current = new Set();
       saveTradesToStorage([]);
       setTrades([]);
       setCurrentTab('dashboard');
