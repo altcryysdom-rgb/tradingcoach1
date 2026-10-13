@@ -6,7 +6,6 @@ import {
   saveTradesToStorage,
   loadSettingsFromStorage,
   saveSettingsToStorage,
-  INITIAL_SAMPLE_TRADES,
 } from './utils/storage';
 import {
   signInWithGoogle,
@@ -60,20 +59,15 @@ export default function App() {
         setIsSyncing(true);
         try {
           await testConnection();
-          // Safe migration: sync local trades to Firestore so no existing trades are lost
-          const localTrades = loadTradesFromStorage();
-          if (localTrades.length > 0) {
-            await syncLocalTradesToFirestore(currentUser.uid, localTrades);
-          }
-
+          // La nube es la fuente de verdad al iniciar sesión. No subir automáticamente
+          // el caché local evita resucitar datos de ejemplo o datos obsoletos.
           // Real-time listener for multi-device sync
           unsubscribeTrades = subscribeToTrades(
             currentUser.uid,
             (remoteTrades) => {
-              if (remoteTrades && remoteTrades.length > 0) {
-                setTrades(remoteTrades);
-                saveTradesToStorage(remoteTrades);
-              }
+              // También aceptar la lista vacía para que las operaciones borradas no reaparezcan.
+              setTrades(remoteTrades);
+              saveTradesToStorage(remoteTrades);
               setIsSyncing(false);
             },
             (err) => {
@@ -229,21 +223,26 @@ export default function App() {
   };
 
   const handleResetToSampleTrades = async () => {
-    setTrades(INITIAL_SAMPLE_TRADES);
-    setCurrentTab('dashboard');
-    if (user) {
-      setIsSyncing(true);
-      try {
-        await syncLocalTradesToFirestore(user.uid, INITIAL_SAMPLE_TRADES);
-      } finally {
-        setIsSyncing(false);
-      }
-    }
+    // Se conservó el callback de la pantalla de ajustes por compatibilidad,
+    // pero ya no se generan operaciones ficticias.
+    await handleClearAllTrades();
   };
 
   const handleClearAllTrades = async () => {
-    setTrades([]);
-    setCurrentTab('dashboard');
+    setIsSyncing(true);
+    try {
+      // Primero sincronizar el borrado con Firestore para evitar que el listener
+      // vuelva a insertar operaciones antiguas en el estado local.
+      if (user) await syncLocalTradesToFirestore(user.uid, []);
+      saveTradesToStorage([]);
+      setTrades([]);
+      setCurrentTab('dashboard');
+    } catch (err) {
+      console.error('No se pudieron borrar todas las operaciones:', err);
+      alert('No se pudieron borrar las operaciones de la nube. Inténtalo de nuevo.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleForceSyncToCloud = async () => {
