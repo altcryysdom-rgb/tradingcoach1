@@ -202,7 +202,7 @@ export async function syncLocalTradesToFirestore(
     const desiredIds = new Set(validTrades.map((trade) => trade.id));
     const operations: Array<
       | { kind: 'delete'; ref: ReturnType<typeof doc> }
-      | { kind: 'set'; ref: ReturnType<typeof doc>; data: Record<string, unknown> }
+      | { kind: 'set'; ref: ReturnType<typeof doc>; data: any }
     > = [];
 
     snapshot.forEach((tradeDoc) => {
