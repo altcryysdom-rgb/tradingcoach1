@@ -258,6 +258,10 @@ export default function App() {
       await signInWithGoogle();
       return;
     }
+    const confirmed = window.confirm(
+      'Esto reemplazará todas las operaciones de Firebase por las que aparecen en este navegador. Las operaciones que solo estén en la nube y no aquí se eliminarán. ¿Quieres continuar?'
+    );
+    if (!confirmed) return;
     setIsSyncing(true);
     try {
       await syncLocalTradesToFirestore(user.uid, trades);
