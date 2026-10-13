@@ -19,6 +19,14 @@ export async function compressTradeImage(
   maxDimension = 1280,
   quality = 0.75
 ): Promise<ImageProcessingResult> {
+  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  if (!allowedTypes.has(file.type)) {
+    return Promise.reject(new Error('Formato no compatible. Selecciona una imagen JPG, PNG o WebP.'));
+  }
+  if (file.size <= 0 || file.size >= 15 * 1024 * 1024) {
+    return Promise.reject(new Error('La imagen debe pesar menos de 15 MB antes de comprimirla.'));
+  }
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Error al leer el archivo de imagen.'));
