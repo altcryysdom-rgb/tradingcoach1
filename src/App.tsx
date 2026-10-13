@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User } from 'firebase/auth';
 import { Trade, Settings } from './types/trade';
 import {
@@ -42,6 +42,10 @@ export default function App() {
     () => settings.privacyMode || false
   );
 
+  // Operaciones locales que todavía no están en la nube. Se conservan hasta
+  // que el usuario decida sincronizarlas, sin subirlas automáticamente.
+  const pendingLocalTradesRef = useRef<Trade[] | null>(null);
+
   // Sync trades to local storage on changes as a permanent offline cache
   useEffect(() => {
     saveTradesToStorage(trades);
@@ -59,6 +63,11 @@ export default function App() {
     const unsubscribeAuth = subscribeToAuth(async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        // Capturar antes de que el primer snapshot remoto reemplace el estado.
+        // No mezclar operaciones pertenecientes a otra cuenta.
+        pendingLocalTradesRef.current = loadTradesFromStorage().filter(
+          (trade) => !trade.userId || trade.userId === currentUser.uid
+        );
         setIsSyncing(true);
         try {
           await testConnection();
@@ -71,8 +80,14 @@ export default function App() {
               // Purgar las cuatro operaciones ficticias de versiones anteriores.
               const sampleIds = new Set<string>(LEGACY_SAMPLE_TRADE_IDS);
               const cleanTrades = remoteTrades.filter((trade) => !sampleIds.has(trade.id));
-              setTrades(cleanTrades);
-              saveTradesToStorage(cleanTrades);
+              const remoteIds = new Set(cleanTrades.map((trade) => trade.id));
+              const pending = (pendingLocalTradesRef.current || []).filter(
+                (trade) => !remoteIds.has(trade.id)
+              );
+              pendingLocalTradesRef.current = pending;
+              const visibleTrades = [...cleanTrades, ...pending];
+              setTrades(visibleTrades);
+              saveTradesToStorage(visibleTrades);
               if (cleanTrades.length !== remoteTrades.length) {
                 const staleSamples = remoteTrades.filter((trade) => sampleIds.has(trade.id));
                 void Promise.all(staleSamples.map((trade) => deleteTradeFromFirestore(currentUser.uid, trade.id))).catch((err) =>
@@ -91,6 +106,7 @@ export default function App() {
           setIsSyncing(false);
         }
       } else {
+        pendingLocalTradesRef.current = null;
         if (unsubscribeTrades) {
           unsubscribeTrades();
           unsubscribeTrades = null;
@@ -242,6 +258,7 @@ export default function App() {
         await syncLocalTradesToFirestore(user.uid, []);
         await deleteAllTradePhotosFromStorage(user.uid);
       }
+      pendingLocalTradesRef.current = [];
       saveTradesToStorage([]);
       setTrades([]);
       setCurrentTab('dashboard');
