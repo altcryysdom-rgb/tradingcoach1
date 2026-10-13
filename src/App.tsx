@@ -6,7 +6,7 @@ import {
   saveTradesToStorage,
   loadSettingsFromStorage,
   saveSettingsToStorage,
-  INITIAL_SAMPLE_TRADES,
+  LEGACY_SAMPLE_TRADE_IDS,
 } from './utils/storage';
 import {
   signInWithGoogle,
@@ -15,6 +15,7 @@ import {
   subscribeToTrades,
   saveTradeToFirestore,
   deleteTradeFromFirestore,
+  deleteAllTradePhotosFromStorage,
   syncLocalTradesToFirestore,
   saveSettingsToFirestore,
   testConnection,
@@ -60,19 +61,22 @@ export default function App() {
         setIsSyncing(true);
         try {
           await testConnection();
-          // Safe migration: sync local trades to Firestore so no existing trades are lost
-          const localTrades = loadTradesFromStorage();
-          if (localTrades.length > 0) {
-            await syncLocalTradesToFirestore(currentUser.uid, localTrades);
-          }
-
+          // La nube es la fuente de verdad al iniciar sesión. No subir automáticamente
+          // el caché local evita resucitar datos de ejemplo o datos obsoletos.
           // Real-time listener for multi-device sync
           unsubscribeTrades = subscribeToTrades(
             currentUser.uid,
             (remoteTrades) => {
-              if (remoteTrades && remoteTrades.length > 0) {
-                setTrades(remoteTrades);
-                saveTradesToStorage(remoteTrades);
+              // Purgar las cuatro operaciones ficticias de versiones anteriores.
+              const sampleIds = new Set<string>(LEGACY_SAMPLE_TRADE_IDS);
+              const cleanTrades = remoteTrades.filter((trade) => !sampleIds.has(trade.id));
+              setTrades(cleanTrades);
+              saveTradesToStorage(cleanTrades);
+              if (cleanTrades.length !== remoteTrades.length) {
+                const staleSamples = remoteTrades.filter((trade) => sampleIds.has(trade.id));
+                void Promise.all(staleSamples.map((trade) => deleteTradeFromFirestore(currentUser.uid, trade.id))).catch((err) =>
+                  console.error('No se pudieron purgar operaciones ficticias de la nube:', err)
+                );
               }
               setIsSyncing(false);
             },
@@ -228,22 +232,27 @@ export default function App() {
     }
   };
 
-  const handleResetToSampleTrades = async () => {
-    setTrades(INITIAL_SAMPLE_TRADES);
-    setCurrentTab('dashboard');
-    if (user) {
-      setIsSyncing(true);
-      try {
-        await syncLocalTradesToFirestore(user.uid, INITIAL_SAMPLE_TRADES);
-      } finally {
-        setIsSyncing(false);
-      }
-    }
-  };
-
   const handleClearAllTrades = async () => {
-    setTrades([]);
-    setCurrentTab('dashboard');
+    setIsSyncing(true);
+    try {
+      // Primero sincronizar el borrado con Firestore para evitar que el listener
+      // vuelva a insertar operaciones antiguas en el estado local.
+      if (user) {
+        await syncLocalTradesToFirestore(user.uid, []);
+        await deleteAllTradePhotosFromStorage(user.uid);
+      }
+      saveTradesToStorage([]);
+      setTrades([]);
+      setCurrentTab('dashboard');
+      if (!user) {
+        alert('Se borraron las operaciones de este navegador. Para borrar también los datos de Firebase, inicia sesión con tu cuenta de Google y vuelve a usar “Limpiar Diario”.');
+      }
+    } catch (err) {
+      console.error('No se pudieron borrar todas las operaciones:', err);
+      alert('No se pudieron borrar las operaciones de la nube. Inténtalo de nuevo.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleForceSyncToCloud = async () => {
@@ -251,6 +260,10 @@ export default function App() {
       await signInWithGoogle();
       return;
     }
+    const confirmed = window.confirm(
+      'Esto reemplazará todas las operaciones de Firebase por las que aparecen en este navegador. Las operaciones que solo estén en la nube y no aquí se eliminarán. ¿Quieres continuar?'
+    );
+    if (!confirmed) return;
     setIsSyncing(true);
     try {
       await syncLocalTradesToFirestore(user.uid, trades);
@@ -345,7 +358,6 @@ export default function App() {
               }
             }}
             onRestoreBackup={handleRestoreBackup}
-            onResetToSampleTrades={handleResetToSampleTrades}
             onClearAllTrades={handleClearAllTrades}
             onSignIn={signInWithGoogle}
             onSignOut={signOutUser}
