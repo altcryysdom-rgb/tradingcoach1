@@ -19,7 +19,7 @@ import {
   getDocs,
   writeBatch,
 } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { getStorage, ref as storageRef, listAll, deleteObject } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Trade, Settings } from '../types/trade';
 
@@ -185,6 +185,29 @@ export async function deleteTradeFromFirestore(userId: string, tradeId: string):
     await deleteDoc(tradeRef);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// Remove all trade screenshots belonging to one authenticated user, including nested trade folders.
+export async function deleteAllTradePhotosFromStorage(userId: string): Promise<void> {
+  const rootRef = storageRef(storage, `users/${userId}/trades`);
+  const removeFolder = async (folderRef: ReturnType<typeof storageRef>): Promise<void> => {
+    const result = await listAll(folderRef);
+    await Promise.all(result.items.map(async (item) => {
+      try {
+        await deleteObject(item);
+      } catch (error) {
+        console.warn('No se pudo borrar una captura del almacenamiento:', error);
+      }
+    }));
+    await Promise.all(result.prefixes.map((prefix) => removeFolder(prefix)));
+  };
+
+  try {
+    await removeFolder(rootRef);
+  } catch (error) {
+    // Firestore deletion should remain possible even if Storage is not provisioned.
+    console.warn('No se pudieron enumerar todas las capturas de Firebase Storage:', error);
   }
 }
 
