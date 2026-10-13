@@ -17,6 +17,7 @@ import {
   deleteTradeFromFirestore,
   deleteAllTradePhotosFromStorage,
   syncLocalTradesToFirestore,
+  mergeLocalTradesToFirestore,
   saveSettingsToFirestore,
   testConnection,
 } from './services/firebase';
@@ -222,7 +223,7 @@ export default function App() {
     if (user) {
       setIsSyncing(true);
       try {
-        await syncLocalTradesToFirestore(user.uid, newTrades);
+        await mergeLocalTradesToFirestore(user.uid, newTrades);
         if (newSettings) {
           await saveSettingsToFirestore(user.uid, newSettings);
         }
@@ -261,12 +262,12 @@ export default function App() {
       return;
     }
     const confirmed = window.confirm(
-      'Esto reemplazará todas las operaciones de Firebase por las que aparecen en este navegador. Las operaciones que solo estén en la nube y no aquí se eliminarán. ¿Quieres continuar?'
+      'Esto agregará o actualizará las operaciones de este navegador en Firebase sin borrar las que ya están en la nube. Si tienen el mismo identificador, se actualizarán con la versión local. ¿Quieres continuar?'
     );
     if (!confirmed) return;
     setIsSyncing(true);
     try {
-      await syncLocalTradesToFirestore(user.uid, trades);
+      await mergeLocalTradesToFirestore(user.uid, trades);
     } finally {
       setIsSyncing(false);
     }
