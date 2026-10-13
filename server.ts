@@ -9,8 +9,39 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json({ limit: '30mb' }));
-app.use(express.urlencoded({ extended: true, limit: '30mb' }));
+app.use(express.json({ limit: '24mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Limit public AI endpoints to reduce accidental loops and abuse of the Gemini quota.
+// This in-memory limiter resets on server restart; production deployments should also
+// enforce limits at the hosting/proxy layer and authenticate requests.
+const COACH_RATE_WINDOW_MS = 15 * 60 * 1000;
+const COACH_RATE_LIMIT = 30;
+const coachRequestCounts = new Map<string, { count: number; resetAt: number }>();
+app.use('/api/coach', (req, res, next) => {
+  const now = Date.now();
+  const key = req.ip || req.socket.remoteAddress || 'unknown';
+  let entry = coachRequestCounts.get(key);
+  if (!entry || entry.resetAt <= now) {
+    entry = { count: 0, resetAt: now + COACH_RATE_WINDOW_MS };
+  }
+  entry.count += 1;
+  coachRequestCounts.set(key, entry);
+  if (coachRequestCounts.size > 5000) {
+    for (const [ip, value] of coachRequestCounts) {
+      if (value.resetAt <= now) coachRequestCounts.delete(ip);
+    }
+  }
+  res.setHeader('RateLimit-Limit', String(COACH_RATE_LIMIT));
+  res.setHeader('RateLimit-Remaining', String(Math.max(0, COACH_RATE_LIMIT - entry.count)));
+  if (entry.count > COACH_RATE_LIMIT) {
+    res.setHeader('Retry-After', String(Math.ceil((entry.resetAt - now) / 1000)));
+    res.status(429).json({ error: 'Demasiadas solicitudes al Coach. Espera unos minutos e inténtalo de nuevo.' });
+    return;
+  }
+  coachRequestCounts.set(key, entry);
+  next();
+});
 
 // Initialize Google GenAI on the server with recommended User-Agent header
 const apiKey = process.env.GEMINI_API_KEY || '';
@@ -55,8 +86,12 @@ interface ParsedImagePart {
   type: string;
 }
 
+const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_IMAGE_HOSTS = new Set(['firebasestorage.googleapis.com', 'storage.googleapis.com']);
+
 async function parseImageToInlinePart(img: any): Promise<ParsedImagePart | null> {
-  if (!img) return null;
+  if (!img || typeof img !== 'object') return null;
   try {
     let base64Data = '';
     let mimeType = 'image/jpeg';
@@ -87,22 +122,59 @@ async function parseImageToInlinePart(img: any): Promise<ParsedImagePart | null>
         } else {
           return null;
         }
-      } else if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
-        const fetchRes = await fetch(rawUrl);
-        if (!fetchRes.ok) {
-          console.warn(`No se pudo descargar imagen remota (${fetchRes.status}): ${rawUrl}`);
+      } else {
+        let imageUrl: URL;
+        try {
+          imageUrl = new URL(rawUrl);
+        } catch {
           return null;
         }
-        const arrayBuf = await fetchRes.arrayBuffer();
-        base64Data = Buffer.from(arrayBuf).toString('base64');
-        const headerMime = fetchRes.headers.get('content-type');
-        if (headerMime && headerMime.startsWith('image/')) {
-          mimeType = headerMime.split(';')[0];
+        // Only download from Firebase Storage hosts. Reject HTTP, credentials, redirects
+        // and arbitrary URLs to prevent SSRF against internal services.
+        if (
+          imageUrl.protocol !== 'https:' ||
+          !ALLOWED_IMAGE_HOSTS.has(imageUrl.hostname) ||
+          imageUrl.username ||
+          imageUrl.password
+        ) return null;
+
+        const fetchRes = await fetch(imageUrl, { redirect: 'error', signal: AbortSignal.timeout(10000) });
+        if (!fetchRes.ok || !fetchRes.body) return null;
+        const headerMime = (fetchRes.headers.get('content-type') || '').split(';')[0].toLowerCase();
+        if (!ALLOWED_IMAGE_MIME_TYPES.has(headerMime)) return null;
+        const contentLength = Number(fetchRes.headers.get('content-length') || 0);
+        if (contentLength > MAX_IMAGE_BYTES) {
+          await fetchRes.body.cancel();
+          return null;
         }
+
+        const reader = fetchRes.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let totalBytes = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          totalBytes += value.byteLength;
+          if (totalBytes > MAX_IMAGE_BYTES) {
+            await reader.cancel();
+            return null;
+          }
+          chunks.push(value);
+        }
+        if (totalBytes === 0) return null;
+        base64Data = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('base64');
+        mimeType = headerMime;
       }
     }
 
     if (!base64Data) return null;
+    base64Data = base64Data.replace(/\\s/g, '');
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType.toLowerCase())) return null;
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64Data)) return null;
+    const decodedBytes = Buffer.from(base64Data, 'base64');
+    if (decodedBytes.length === 0 || decodedBytes.length > MAX_IMAGE_BYTES) return null;
+    base64Data = decodedBytes.toString('base64');
+    mimeType = mimeType.toLowerCase();
 
     return {
       part: {
@@ -137,8 +209,17 @@ app.post('/api/coach/chat', async (req: Request, res: Response): Promise<void> =
       tradeContext = null,
     } = req.body;
 
-    if (!message || typeof message !== 'string') {
-      res.status(400).json({ error: 'El mensaje del usuario es requerido.' });
+    const messageText = typeof message === 'string' ? message.trim() : '';
+    if (!messageText && (!Array.isArray(images) || images.length === 0)) {
+      res.status(400).json({ error: 'Escribe un mensaje o adjunta al menos una imagen.' });
+      return;
+    }
+    if (!Array.isArray(images) || images.length > 4) {
+      res.status(400).json({ error: 'Puedes enviar hasta 4 imágenes por mensaje.' });
+      return;
+    }
+    if (!Array.isArray(trades) || !Array.isArray(history)) {
+      res.status(400).json({ error: 'El formato del contexto enviado no es válido.' });
       return;
     }
 
@@ -201,7 +282,7 @@ OBJETIVO PRINCIPAL:
 Permitir al usuario registrar sus operaciones de trading, reflexiones y analizar técnica y psicológicamente su operativa de forma conversacional y visual.
 
 CAPACIDADES MULTIMODALES Y ANÁLISIS DE CAPTURAS:
-1. TIENES VISIÓN ARTIFICIAL ACTIVA: Puedes recibir y analizar directamente capturas de pantalla de gráficos (gráfico 1M antes de entrar, gráfico 1M después de cerrar, contexto mayor 15M/1H).
+1. SOLO analiza visualmente las capturas realmente adjuntas a esta solicitud. Si no recibes imágenes, no afirmes haberlas visto ni inventes detalles visuales.
 2. ANÁLISIS BASADO EXCLUSIVAMENTE EN LO VISIBLE:
    - Examina la estructura del precio (velas, impulsos, retrocesos, niveles de soporte/resistencia, altos y bajos).
    - Comprueba el gatillo de entrada y la salida en relación a la acción del precio.
@@ -322,7 +403,7 @@ MNQ = $${settings.instruments?.MNQ?.pointValue || 2}/pt, MGC = $${settings.instr
       });
     }
 
-    currentUserParts.push({ text: message });
+    if (messageText) currentUserParts.push({ text: messageText });
 
     formattedContents.push({
       role: 'user',
@@ -373,8 +454,12 @@ app.post('/api/coach/analyze-trade-images', async (req: Request, res: Response):
   try {
     const { trade, selectedPhotos = [], customPrompt = '' } = req.body;
 
-    if (!trade) {
+    if (!trade || typeof trade !== 'object') {
       res.status(400).json({ error: 'Se requiere la operación de trading para analizar.' });
+      return;
+    }
+    if (!Array.isArray(selectedPhotos) || selectedPhotos.length > 4) {
+      res.status(400).json({ error: 'Selecciona hasta 4 capturas válidas para la auditoría.' });
       return;
     }
 
@@ -513,6 +598,10 @@ DATOS DE LA OPERACIÓN:
 app.post('/api/coach/weekly-report', async (req: Request, res: Response): Promise<void> => {
   try {
     const { weekTrades = [], weekLabel = 'Esta Semana' } = req.body;
+    if (!Array.isArray(weekTrades) || weekTrades.length > 100) {
+      res.status(400).json({ error: 'El informe acepta hasta 100 operaciones por solicitud.' });
+      return;
+    }
 
     if (!apiKey) {
       res.status(500).json({ error: 'GEMINI_API_KEY no configurada.' });
