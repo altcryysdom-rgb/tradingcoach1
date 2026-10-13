@@ -23,7 +23,7 @@ export async function compressTradeImage(
   if (!allowedTypes.has(file.type)) {
     return Promise.reject(new Error('Formato no compatible. Selecciona una imagen JPG, PNG o WebP.'));
   }
-  if (file.size <= 0 || file.size >= 15 * 1024 * 1024) {
+  if (file.size <= 0 || file.size > 15 * 1024 * 1024) {
     return Promise.reject(new Error('La imagen debe pesar menos de 15 MB antes de comprimirla.'));
   }
 
