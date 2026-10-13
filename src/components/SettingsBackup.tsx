@@ -161,7 +161,7 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
                       setSyncMessage(null);
                       try {
                         await onSyncLocalToCloud();
-                        setSyncMessage('¡Operaciones locales sincronizadas exitosamente a la nube!');
+                        setSyncMessage('La colección de Firebase fue reemplazada por las operaciones locales.');
                         setTimeout(() => setSyncMessage(null), 3500);
                       } catch (err: any) {
                         setSyncMessage('Error al sincronizar: ' + (err.message || 'Intente nuevamente'));
@@ -172,7 +172,7 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
                     className="px-3 py-1.5 bg-[#0f1f38] hover:bg-[#1a365d] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shadow-2xs"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 text-blue-300 ${isPushing || isSyncing ? 'animate-spin' : ''}`} />
-                    <span>Forzar Subida a Nube</span>
+                    <span>Reemplazar datos de nube</span>
                   </button>
                 )}
                 {onSignOut && (
