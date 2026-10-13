@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Trade, Settings, TradeEntry } from '../types/trade';
+import { auth, signInWithGoogle } from '../services/firebase';
 import {
   calculateWeightedEntry,
   calculateGrossPoints,
@@ -81,6 +82,19 @@ interface TradingCoachProps {
   onUpdateTrade: (trade: Trade) => void;
   onOpenTradeFormWithDraft: (draft: Partial<Trade>) => void;
   onNavigateToDashboard: () => void;
+}
+
+async function getCoachHeaders(): Promise<Record<string, string>> {
+  let currentUser = auth.currentUser;
+  if (!currentUser) currentUser = await signInWithGoogle();
+  if (!currentUser) {
+    throw new Error('Inicia sesión con Google para utilizar el Trading Coach y la auditoría visual.');
+  }
+  const idToken = await currentUser.getIdToken();
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${idToken}`,
+  };
 }
 
 export const TradingCoach: React.FC<TradingCoachProps> = ({
@@ -266,7 +280,7 @@ export const TradingCoach: React.FC<TradingCoachProps> = ({
 
       const response = await fetch('/api/coach/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getCoachHeaders(),
         body: JSON.stringify({
           message: message || 'Por favor analiza estas capturas de trading.',
           history: historyPayload,
@@ -368,7 +382,7 @@ export const TradingCoach: React.FC<TradingCoachProps> = ({
     try {
       const res = await fetch('/api/coach/analyze-trade-images', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getCoachHeaders(),
         body: JSON.stringify({
           trade: targetTrade,
           selectedPhotos: selectedPhotosList,
@@ -573,7 +587,7 @@ export const TradingCoach: React.FC<TradingCoachProps> = ({
 
       const response = await fetch('/api/coach/weekly-report', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getCoachHeaders(),
         body: JSON.stringify({
           weekTrades,
           weekLabel: `Semana del ${mondayStr} al ${now.toISOString().split('T')[0]}`,
