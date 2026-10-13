@@ -8,7 +8,7 @@ import firebaseConfig from './firebase-applet-config.json';
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: '24mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
