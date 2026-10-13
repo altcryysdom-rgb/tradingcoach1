@@ -4,6 +4,15 @@ import { DEFAULT_INSTRUMENTS } from './calculations';
 const STORAGE_KEY_TRADES = 'nexus_futures_trades_v1';
 const STORAGE_KEY_SETTINGS = 'nexus_futures_settings_v1';
 
+// IDs de las cuatro operaciones ficticias de versiones anteriores; se purgan del caché y la nube.
+export const LEGACY_SAMPLE_TRADE_IDS = [
+  'TRD-20261008-001',
+  'TRD-20261009-002',
+  'TRD-20261010-003',
+  'TRD-20261011-004',
+] as const;
+const LEGACY_SAMPLE_TRADE_ID_SET = new Set<string>(LEGACY_SAMPLE_TRADE_IDS);
+
 export const INITIAL_SETTINGS: Settings = {
   instruments: DEFAULT_INSTRUMENTS,
   privacyMode: false,
@@ -19,7 +28,10 @@ export function loadTradesFromStorage(): Trade[] {
     const raw = localStorage.getItem(STORAGE_KEY_TRADES);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    const realTrades = parsed.filter((trade) => !LEGACY_SAMPLE_TRADE_ID_SET.has(String(trade?.id || '')));
+    if (realTrades.length !== parsed.length) saveTradesToStorage(realTrades);
+    return realTrades;
   } catch (err) {
     console.error('Error loading trades from storage:', err);
     return [];
