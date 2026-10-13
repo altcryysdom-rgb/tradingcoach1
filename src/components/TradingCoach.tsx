@@ -97,7 +97,7 @@ export const TradingCoach: React.FC<TradingCoachProps> = ({
     {
       id: 'msg-welcome',
       role: 'model',
-      text: `Hola, soy tu **Trading Coach** con Gemini AI.\n\nEstoy conectado a tus operaciones y tengo **visión artificial multimodal activa** para analizar tus capturas de pantalla de 1M (antes de entrar y después de cerrar) y contexto mayor (15M / 1H).\n\nPuedes escribir lo que hiciste hoy, seleccionar una operación para auditar sus fotos con el botón superior, o adjuntar capturas directamente en el chat.`,
+      text: `Hola, soy tu **Trading Coach** con Gemini AI.\n\nPuedo analizar capturas cuando las adjuntas y el servicio de Gemini está disponible; si no se adjunta una imagen, no afirmaré haberla visto.\n\nPuedes escribir lo que hiciste hoy, adjuntar una captura con el botón de clip o abrir la auditoría independiente de una operación.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -209,25 +209,38 @@ export const TradingCoach: React.FC<TradingCoachProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      alert('Por favor selecciona un archivo de imagen válido (PNG, JPG, WebP).');
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Formato no compatible. Selecciona una imagen JPG, PNG o WebP.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      alert('La imagen supera el límite de 4 MB. Reduce su tamaño e inténtalo otra vez.');
+      e.target.value = '';
+      return;
+    }
+    if (pendingChatImages.length >= 4) {
+      alert('Puedes adjuntar hasta 4 imágenes por mensaje.');
+      e.target.value = '';
       return;
     }
 
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        setPendingChatImages((prev) => [
-          ...prev,
-          {
+        setPendingChatImages((prev) => {
+          if (prev.length >= 4) return prev;
+          return [...prev, {
             dataUrl: reader.result as string,
             label: file.name.replace(/\.[^/.]+$/, ''),
             type: 'CAPTURA_GRAFICO',
             name: file.name,
-          },
-        ]);
+          }];
+        });
       }
     };
+    reader.onerror = () => alert('No se pudo leer la imagen. Prueba con otro archivo.');
     reader.readAsDataURL(file);
     e.target.value = '';
   };
@@ -1136,6 +1149,29 @@ export const TradingCoach: React.FC<TradingCoachProps> = ({
           </div>
         )}
 
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handleFileSelected}
+          aria-label="Adjuntar captura de trading"
+        />
+
+        {pendingChatImages.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {pendingChatImages.map((image, index) => (
+              <div key={`${image.name || image.label}-${index}`} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 max-w-full">
+                <img src={image.dataUrl} alt={image.label} className="h-12 w-16 rounded object-cover border border-slate-200" />
+                <span className="max-w-32 truncate text-[11px] text-slate-600">{image.name || image.label}</span>
+                <button type="button" onClick={() => handleRemovePendingImage(index)} title="Quitar imagen" aria-label="Quitar imagen" className="rounded p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-700">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-end gap-2">
           <textarea
             rows={2}
@@ -1154,6 +1190,18 @@ export const TradingCoach: React.FC<TradingCoachProps> = ({
             }
             className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 resize-none font-sans"
           />
+
+          {/* Attach Image Button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isLoading || pendingChatImages.length >= 4}
+            title="Adjuntar captura (JPG, PNG o WebP; máximo 4 MB)"
+            aria-label="Adjuntar captura"
+            className="p-2.5 rounded-xl border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
+          >
+            <Paperclip className="w-4 h-4" />
+          </button>
 
           {/* Voice Input Button */}
           <button
@@ -1181,7 +1229,7 @@ export const TradingCoach: React.FC<TradingCoachProps> = ({
           <button
             type="button"
             onClick={() => handleSendMessage()}
-            disabled={!inputText.trim() || isLoading}
+            disabled={(!inputText.trim() && pendingChatImages.length === 0) || isLoading}
             className="p-2.5 rounded-xl bg-[#0f1f38] hover:bg-[#1a365d] text-white font-bold transition-colors cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
           >
             <Send className="w-4 h-4" />
