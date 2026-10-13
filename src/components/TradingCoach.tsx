@@ -111,7 +111,7 @@ export const TradingCoach: React.FC<TradingCoachProps> = ({
     {
       id: 'msg-welcome',
       role: 'model',
-      text: `Hola, soy tu **Trading Coach** con Gemini AI.\n\nEstoy conectado a tus operaciones y tengo **visión artificial multimodal activa** para analizar tus capturas de pantalla de 1M (antes de entrar y después de cerrar) y contexto mayor (15M / 1H).\n\nPuedes escribir lo que hiciste hoy, seleccionar una operación para auditar sus fotos con el botón superior, o adjuntar capturas directamente en el chat.`,
+      text: `Hola, soy tu **Trading Coach** con Gemini AI.\n\nPuedo analizar capturas cuando las adjuntas y el servicio de Gemini está disponible; si no se adjunta una imagen, no afirmaré haberla visto.\n\nPuedes escribir lo que hiciste hoy, adjuntar una captura con el botón de clip o abrir la auditoría independiente de una operación.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
