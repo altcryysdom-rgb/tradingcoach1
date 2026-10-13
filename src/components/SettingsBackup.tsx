@@ -198,8 +198,8 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
               <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                 <span className="text-slate-500 text-[10px] block font-medium">Aislamiento de Seguridad</span>
-                <span className="font-semibold text-emerald-700 text-xs mt-0.5 block">Solo tú tienes acceso</span>
-                <p className="text-[10px] text-slate-500 mt-1">Reglas Zero-Trust: nadie más puede ver tus números o psicología.</p>
+                <span className="font-semibold text-emerald-700 text-xs mt-0.5 block">Acceso de cuenta protegido</span>
+                <p className="text-[10px] text-slate-500 mt-1">Las reglas de Firestore limitan el acceso a los datos guardados según la cuenta autenticada.</p>
               </div>
               <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                 <span className="text-slate-500 text-[10px] block font-medium">Límite Diario Gratuito</span>
@@ -242,10 +242,10 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
         <Shield className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
         <div className="text-xs space-y-1">
           <h2 className="font-bold text-slate-900 text-sm">
-            Privacidad Total y Gratuita
+            Privacidad y uso de datos
           </h2>
           <p className="text-slate-600 leading-relaxed font-sans">
-            Esta aplicación opera de forma cliente-servidor aislada y privada en tu dispositivo. Ningún dato financiero o personal se envía a terceros ni se indexa públicamente. No requiere tarjeta de crédito ni suscripciones pagas.
+            Tus operaciones se guardan en el navegador y, si conectas Google, en Firebase. Cuando utilizas el Coach o la auditoría visual, el contexto enviado y las capturas seleccionadas se procesan mediante Google Gemini. No adjuntes contraseñas, datos de pago ni información que no quieras enviar a esos servicios. La aplicación no requiere tarjeta de crédito ni suscripción propia.
           </p>
         </div>
       </div>
