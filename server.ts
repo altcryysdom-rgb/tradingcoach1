@@ -505,7 +505,7 @@ MNQ = $${settings.instruments?.MNQ?.pointValue || 2}/pt, MGC = $${settings.instr
   } catch (error: any) {
     console.error('Error in /api/coach/chat:', error);
     res.status(500).json({
-      error: error.message || 'Error al comunicarse con Gemini.',
+      error: 'No se pudo procesar la solicitud. Inténtalo de nuevo.',
       reply: 'Disculpa, ocurrió un error temporal al procesar tu solicitud con el Trading Coach. Por favor intenta de nuevo.',
     });
   }
@@ -651,7 +651,7 @@ DATOS DE LA OPERACIÓN:
   } catch (error: any) {
     console.error('Error in /api/coach/analyze-trade-images:', error);
     res.status(500).json({
-      error: error.message || 'Error al procesar el análisis de imágenes con Gemini.',
+      error: 'No se pudo completar la auditoría visual. Inténtalo de nuevo.',
     });
   }
 });
@@ -696,7 +696,7 @@ Si no hubo operaciones registradas en esta semana, indícalo claramente con cons
   } catch (error: any) {
     console.error('Error in /api/coach/weekly-report:', error);
     res.status(500).json({
-      error: error.message || 'Error al generar el informe semanal.',
+      error: 'No se pudo generar el informe semanal. Inténtalo de nuevo.',
     });
   }
 });
