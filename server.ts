@@ -190,9 +190,15 @@ async function parseImageToInlinePart(img: any): Promise<ParsedImagePart | null>
         }
         // Only download from Firebase Storage hosts. Reject HTTP, credentials, redirects
         // and arbitrary URLs to prevent SSRF against internal services.
+        const isAllowedStorageObject =
+          (imageUrl.hostname === 'firebasestorage.googleapis.com' &&
+            imageUrl.pathname.startsWith(`/v0/b/${firebaseConfig.storageBucket}/o/`)) ||
+          (imageUrl.hostname === 'storage.googleapis.com' &&
+            imageUrl.pathname.startsWith(`/${firebaseConfig.storageBucket}/`));
         if (
           imageUrl.protocol !== 'https:' ||
           !ALLOWED_IMAGE_HOSTS.has(imageUrl.hostname) ||
+          !isAllowedStorageObject ||
           imageUrl.username ||
           imageUrl.password
         ) return null;
