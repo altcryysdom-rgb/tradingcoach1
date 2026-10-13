@@ -15,6 +15,7 @@ import {
   subscribeToTrades,
   saveTradeToFirestore,
   deleteTradeFromFirestore,
+  deleteAllTradePhotosFromStorage,
   syncLocalTradesToFirestore,
   saveSettingsToFirestore,
   testConnection,
@@ -238,6 +239,7 @@ export default function App() {
       // vuelva a insertar operaciones antiguas en el estado local.
       if (user) {
         await syncLocalTradesToFirestore(user.uid, []);
+        await deleteAllTradePhotosFromStorage(user.uid);
       }
       saveTradesToStorage([]);
       setTrades([]);
