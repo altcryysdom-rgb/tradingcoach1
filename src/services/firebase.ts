@@ -16,9 +16,10 @@ import {
   collection,
   onSnapshot,
   getDocFromServer,
+  getDocs,
   writeBatch,
 } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { getStorage, ref as storageRef, listAll, deleteObject } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Trade, Settings } from '../types/trade';
 
@@ -187,36 +188,75 @@ export async function deleteTradeFromFirestore(userId: string, tradeId: string):
   }
 }
 
-// Safe Migration: Synchronize local trades into Firestore without duplication
+// Remove all trade screenshots belonging to one authenticated user, including nested trade folders.
+export async function deleteAllTradePhotosFromStorage(userId: string): Promise<void> {
+  const rootRef = storageRef(storage, `users/${userId}/trades`);
+  const removeFolder = async (folderRef: ReturnType<typeof storageRef>): Promise<void> => {
+    const result = await listAll(folderRef);
+    await Promise.all(result.items.map(async (item) => {
+      try {
+        await deleteObject(item);
+      } catch (error) {
+        console.warn('No se pudo borrar una captura del almacenamiento:', error);
+      }
+    }));
+    await Promise.all(result.prefixes.map((prefix) => removeFolder(prefix)));
+  };
+
+  try {
+    await removeFolder(rootRef);
+  } catch (error) {
+    // Firestore deletion should remain possible even if Storage is not provisioned.
+    console.warn('No se pudieron enumerar todas las capturas de Firebase Storage:', error);
+  }
+}
+
+// Reemplaza el conjunto de operaciones de la nube por el conjunto local indicado.
+// Una lista vacía significa borrar todas las operaciones de esa cuenta.
 export async function syncLocalTradesToFirestore(
   userId: string,
   localTrades: Trade[]
 ): Promise<{ syncedCount: number }> {
-  if (!localTrades.length) return { syncedCount: 0 };
-
-  const batch = writeBatch(db);
-  let count = 0;
-
-  for (const trade of localTrades) {
-    // Only migrate if it has an id
-    if (!trade.id) continue;
-    const docRef = doc(db, 'users', userId, 'trades', trade.id);
-    batch.set(
-      docRef,
-      {
-        ...trade,
-        userId,
-        updatedAt: trade.updatedAt || new Date().toISOString(),
-      },
-      { merge: true }
-    );
-    count++;
-  }
-
   const path = `users/${userId}/trades`;
   try {
-    await batch.commit();
-    return { syncedCount: count };
+    const tradesRef = collection(db, 'users', userId, 'trades');
+    const snapshot = await getDocs(tradesRef);
+    const validTrades = localTrades.filter((trade) => typeof trade.id === 'string' && trade.id.trim());
+    const desiredIds = new Set(validTrades.map((trade) => trade.id));
+    const operations: Array<
+      | { kind: 'delete'; ref: ReturnType<typeof doc> }
+      | { kind: 'set'; ref: ReturnType<typeof doc>; data: any }
+    > = [];
+
+    snapshot.forEach((tradeDoc) => {
+      if (!desiredIds.has(tradeDoc.id)) {
+        operations.push({ kind: 'delete', ref: doc(db, 'users', userId, 'trades', tradeDoc.id) });
+      }
+    });
+
+    for (const trade of validTrades) {
+      operations.push({
+        kind: 'set',
+        ref: doc(db, 'users', userId, 'trades', trade.id),
+        data: {
+          ...trade,
+          userId,
+          updatedAt: trade.updatedAt || new Date().toISOString(),
+        },
+      });
+    }
+
+    // Firestore batches are limited; use chunks below the 500-operation maximum.
+    for (let offset = 0; offset < operations.length; offset += 450) {
+      const batch = writeBatch(db);
+      for (const operation of operations.slice(offset, offset + 450)) {
+        if (operation.kind === 'delete') batch.delete(operation.ref);
+        else batch.set(operation.ref, operation.data, { merge: true });
+      }
+      await batch.commit();
+    }
+
+    return { syncedCount: validTrades.length };
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
