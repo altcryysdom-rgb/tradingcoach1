@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Settings, Trade, InstrumentConfig } from '../types/trade';
-import { exportBackupJSON, parseBackupJSON, INITIAL_SAMPLE_TRADES } from '../utils/storage';
+import { exportBackupJSON, parseBackupJSON } from '../utils/storage';
 import {
   Settings as SettingsIcon,
   Download,
@@ -28,7 +28,6 @@ interface SettingsBackupProps {
   isSyncing?: boolean;
   onUpdateSettings: (newSettings: Settings) => void;
   onRestoreBackup: (trades: Trade[], settings?: Settings) => void;
-  onResetToSampleTrades: () => void;
   onClearAllTrades: () => void;
   onSignIn?: () => void;
   onSignOut?: () => void;
@@ -42,7 +41,6 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
   isSyncing,
   onUpdateSettings,
   onRestoreBackup,
-  onResetToSampleTrades,
   onClearAllTrades,
   onSignIn,
   onSignOut,
@@ -163,7 +161,7 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
                       setSyncMessage(null);
                       try {
                         await onSyncLocalToCloud();
-                        setSyncMessage('¡Operaciones locales sincronizadas exitosamente a la nube!');
+                        setSyncMessage('Las operaciones locales se agregaron o actualizaron en Firebase sin borrar las operaciones que solo están en la nube.');
                         setTimeout(() => setSyncMessage(null), 3500);
                       } catch (err: any) {
                         setSyncMessage('Error al sincronizar: ' + (err.message || 'Intente nuevamente'));
@@ -174,7 +172,7 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
                     className="px-3 py-1.5 bg-[#0f1f38] hover:bg-[#1a365d] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shadow-2xs"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 text-blue-300 ${isPushing || isSyncing ? 'animate-spin' : ''}`} />
-                    <span>Forzar Subida a Nube</span>
+                    <span>Reemplazar datos de nube</span>
                   </button>
                 )}
                 {onSignOut && (
@@ -200,8 +198,8 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
               <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                 <span className="text-slate-500 text-[10px] block font-medium">Aislamiento de Seguridad</span>
-                <span className="font-semibold text-emerald-700 text-xs mt-0.5 block">Solo tú tienes acceso</span>
-                <p className="text-[10px] text-slate-500 mt-1">Reglas Zero-Trust: nadie más puede ver tus números o psicología.</p>
+                <span className="font-semibold text-emerald-700 text-xs mt-0.5 block">Acceso de cuenta protegido</span>
+                <p className="text-[10px] text-slate-500 mt-1">Las reglas de Firestore limitan el acceso a los datos guardados según la cuenta autenticada.</p>
               </div>
               <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                 <span className="text-slate-500 text-[10px] block font-medium">Límite Diario Gratuito</span>
@@ -222,7 +220,7 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
                 Inicia sesión para sincronizar entre tu Computadora y tu Celular
               </h3>
               <p className="text-[11px] text-slate-500 mt-1 max-w-lg">
-                Conecta tu cuenta de Google para guardar tus operaciones en Firebase Firestore de forma privada. Tus operaciones actuales no se borrarán; se subirán automáticamente.
+                Conecta tu cuenta de Google para sincronizar el diario con Firebase Firestore. Al iniciar sesión, la lista de la nube reemplaza el caché local; la sincronización manual agrega o actualiza operaciones sin borrar las que solo estén en Firebase.
               </p>
             </div>
             {onSignIn && (
@@ -244,10 +242,10 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
         <Shield className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
         <div className="text-xs space-y-1">
           <h2 className="font-bold text-slate-900 text-sm">
-            Privacidad Total y Gratuita
+            Privacidad y uso de datos
           </h2>
           <p className="text-slate-600 leading-relaxed font-sans">
-            Esta aplicación opera de forma cliente-servidor aislada y privada en tu dispositivo. Ningún dato financiero o personal se envía a terceros ni se indexa públicamente. No requiere tarjeta de crédito ni suscripciones pagas.
+            Tus operaciones se guardan en el navegador y, si conectas Google, en Firebase. Cuando utilizas el Coach o la auditoría visual, el contexto enviado y las capturas seleccionadas se procesan mediante Google Gemini. No adjuntes contraseñas, datos de pago ni información que no quieras enviar a esos servicios. La aplicación no requiere tarjeta de crédito ni suscripción propia.
           </p>
         </div>
       </div>
@@ -507,38 +505,20 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
         </div>
       </div>
 
-      {/* 3. Sample Data & Reset */}
+      {/* 3. Journal Maintenance */}
       <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
         <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2 pb-2 border-b border-slate-100">
           <RotateCcw className="w-4 h-4 text-slate-500" />
-          <span>3. Datos de Prueba y Mantenimiento</span>
+          <span>3. Mantenimiento del diario</span>
         </h2>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-xs font-bold text-slate-800">
-              Cargar Operaciones de Ejemplo Verificadas
-            </h3>
-            <p className="text-[11px] text-slate-500 mt-0.5 max-w-lg">
-              Carga 4 operaciones de muestra (Long, Short, escala de 3 entradas, stops y take profits) para explorar las métricas.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onResetToSampleTrades}
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-xs font-semibold text-slate-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap shadow-2xs"
-          >
-            Cargar Datos de Muestra
-          </button>
-        </div>
-
+        <p className="text-[11px] text-slate-500 max-w-lg">
+          El diario empieza vacío, sin operaciones ficticias. Si has iniciado sesión, puedes borrar las operaciones del navegador y de Firebase; sin sesión, solo se borrará el navegador.
+        </p>
         <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-xs font-bold text-rose-700">
-              Borrar Todas las Operaciones
-            </h3>
+            <h3 className="text-xs font-bold text-rose-700">Borrar todas las operaciones</h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Elimina todas las operaciones del navegador para comenzar un diario desde cero.
+              Elimina las operaciones del navegador y, si has iniciado sesión, también de Firebase.
             </p>
           </div>
           <button
@@ -550,7 +530,6 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
           </button>
         </div>
       </div>
-
       {/* Confirmation Modal to Clear All Trades */}
       {showClearModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -564,7 +543,7 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
                   ¿Borrar todas las operaciones?
                 </h3>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Esta acción eliminará todas las operaciones registradas para comenzar el diario desde cero. Asegúrate de haber descargado una copia de seguridad JSON previamente si deseas conservar tus datos.
+                  Esta acción elimina todas las operaciones locales y, si has iniciado sesión, también las operaciones y capturas guardadas en Firebase. No se puede deshacer. Descarga una copia de seguridad antes de continuar.
                 </p>
               </div>
             </div>

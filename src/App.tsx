@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User } from 'firebase/auth';
 import { Trade, Settings } from './types/trade';
 import {
@@ -6,7 +6,7 @@ import {
   saveTradesToStorage,
   loadSettingsFromStorage,
   saveSettingsToStorage,
-  INITIAL_SAMPLE_TRADES,
+  LEGACY_SAMPLE_TRADE_IDS,
 } from './utils/storage';
 import {
   signInWithGoogle,
@@ -15,7 +15,9 @@ import {
   subscribeToTrades,
   saveTradeToFirestore,
   deleteTradeFromFirestore,
+  deleteAllTradePhotosFromStorage,
   syncLocalTradesToFirestore,
+  mergeLocalTradesToFirestore,
   saveSettingsToFirestore,
   testConnection,
 } from './services/firebase';
@@ -40,6 +42,10 @@ export default function App() {
     () => settings.privacyMode || false
   );
 
+  // Solo recordamos IDs que ya vimos en Firebase; no mantenemos una segunda
+  // lista de operaciones. El estado "trades" sigue siendo el único historial visible. 
+  const knownCloudTradeIdsRef = useRef<Set<string>>(new Set());
+
   // Sync trades to local storage on changes as a permanent offline cache
   useEffect(() => {
     saveTradesToStorage(trades);
@@ -57,22 +63,42 @@ export default function App() {
     const unsubscribeAuth = subscribeToAuth(async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        // Conservamos el historial local mientras llega la primera respuesta de Firebase.
+        // No se mantiene una segunda lista de operaciones.
+        knownCloudTradeIdsRef.current = new Set();
         setIsSyncing(true);
         try {
           await testConnection();
-          // Safe migration: sync local trades to Firestore so no existing trades are lost
-          const localTrades = loadTradesFromStorage();
-          if (localTrades.length > 0) {
-            await syncLocalTradesToFirestore(currentUser.uid, localTrades);
-          }
-
+          // La nube es la fuente de verdad al iniciar sesión. No subir automáticamente
+          // el caché local evita resucitar datos de ejemplo o datos obsoletos.
           // Real-time listener for multi-device sync
           unsubscribeTrades = subscribeToTrades(
             currentUser.uid,
             (remoteTrades) => {
-              if (remoteTrades && remoteTrades.length > 0) {
-                setTrades(remoteTrades);
-                saveTradesToStorage(remoteTrades);
+              // Purgar las cuatro operaciones ficticias de versiones anteriores.
+              const sampleIds = new Set<string>(LEGACY_SAMPLE_TRADE_IDS);
+              const cleanTrades = remoteTrades.filter((trade) => !sampleIds.has(trade.id));
+              const remoteIds = new Set(cleanTrades.map((trade) => trade.id));
+              setTrades((previousTrades) => {
+                // Conservar operaciones que solo existen localmente; no duplicar IDs.
+                // Si una operación ya estaba en Firebase y luego se borró allí,
+                // no volver a incorporarla desde la caché en los siguientes snapshots.
+                const localOnlyTrades = previousTrades.filter(
+                  (trade) =>
+                    !remoteIds.has(trade.id) &&
+                    !knownCloudTradeIdsRef.current.has(trade.id) &&
+                    (!trade.userId || trade.userId === currentUser.uid)
+                );
+                const visibleTrades = [...cleanTrades, ...localOnlyTrades];
+                knownCloudTradeIdsRef.current = remoteIds;
+                saveTradesToStorage(visibleTrades);
+                return visibleTrades;
+              });
+              if (cleanTrades.length !== remoteTrades.length) {
+                const staleSamples = remoteTrades.filter((trade) => sampleIds.has(trade.id));
+                void Promise.all(staleSamples.map((trade) => deleteTradeFromFirestore(currentUser.uid, trade.id))).catch((err) =>
+                  console.error('No se pudieron purgar operaciones ficticias de la nube:', err)
+                );
               }
               setIsSyncing(false);
             },
@@ -86,6 +112,7 @@ export default function App() {
           setIsSyncing(false);
         }
       } else {
+        knownCloudTradeIdsRef.current = new Set();
         if (unsubscribeTrades) {
           unsubscribeTrades();
           unsubscribeTrades = null;
@@ -218,7 +245,7 @@ export default function App() {
     if (user) {
       setIsSyncing(true);
       try {
-        await syncLocalTradesToFirestore(user.uid, newTrades);
+        await mergeLocalTradesToFirestore(user.uid, newTrades);
         if (newSettings) {
           await saveSettingsToFirestore(user.uid, newSettings);
         }
@@ -228,22 +255,28 @@ export default function App() {
     }
   };
 
-  const handleResetToSampleTrades = async () => {
-    setTrades(INITIAL_SAMPLE_TRADES);
-    setCurrentTab('dashboard');
-    if (user) {
-      setIsSyncing(true);
-      try {
-        await syncLocalTradesToFirestore(user.uid, INITIAL_SAMPLE_TRADES);
-      } finally {
-        setIsSyncing(false);
-      }
-    }
-  };
-
   const handleClearAllTrades = async () => {
-    setTrades([]);
-    setCurrentTab('dashboard');
+    setIsSyncing(true);
+    try {
+      // Primero sincronizar el borrado con Firestore para evitar que el listener
+      // vuelva a insertar operaciones antiguas en el estado local.
+      if (user) {
+        await syncLocalTradesToFirestore(user.uid, []);
+        await deleteAllTradePhotosFromStorage(user.uid);
+      }
+      knownCloudTradeIdsRef.current = new Set();
+      saveTradesToStorage([]);
+      setTrades([]);
+      setCurrentTab('dashboard');
+      if (!user) {
+        alert('Se borraron las operaciones de este navegador. Para borrar también los datos de Firebase, inicia sesión con tu cuenta de Google y vuelve a usar “Limpiar Diario”.');
+      }
+    } catch (err) {
+      console.error('No se pudieron borrar todas las operaciones:', err);
+      alert('No se pudieron borrar las operaciones de la nube. Inténtalo de nuevo.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleForceSyncToCloud = async () => {
@@ -251,9 +284,13 @@ export default function App() {
       await signInWithGoogle();
       return;
     }
+    const confirmed = window.confirm(
+      'Esto agregará o actualizará las operaciones de este navegador en Firebase sin borrar las que ya están en la nube. Si tienen el mismo identificador, se actualizarán con la versión local. ¿Quieres continuar?'
+    );
+    if (!confirmed) return;
     setIsSyncing(true);
     try {
-      await syncLocalTradesToFirestore(user.uid, trades);
+      await mergeLocalTradesToFirestore(user.uid, trades);
     } finally {
       setIsSyncing(false);
     }
@@ -345,7 +382,6 @@ export default function App() {
               }
             }}
             onRestoreBackup={handleRestoreBackup}
-            onResetToSampleTrades={handleResetToSampleTrades}
             onClearAllTrades={handleClearAllTrades}
             onSignIn={signInWithGoogle}
             onSignOut={signOutUser}
