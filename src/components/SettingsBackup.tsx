@@ -28,7 +28,6 @@ interface SettingsBackupProps {
   isSyncing?: boolean;
   onUpdateSettings: (newSettings: Settings) => void;
   onRestoreBackup: (trades: Trade[], settings?: Settings) => void;
-  onResetToSampleTrades: () => void;
   onClearAllTrades: () => void;
   onSignIn?: () => void;
   onSignOut?: () => void;
@@ -42,7 +41,6 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
   isSyncing,
   onUpdateSettings,
   onRestoreBackup,
-  onResetToSampleTrades,
   onClearAllTrades,
   onSignIn,
   onSignOut,
