@@ -211,6 +211,32 @@ export async function deleteAllTradePhotosFromStorage(userId: string): Promise<v
   }
 }
 
+// Sincronización no destructiva: agrega o actualiza operaciones locales sin borrar
+// las operaciones que existen únicamente en Firebase.
+export async function mergeLocalTradesToFirestore(
+  userId: string,
+  localTrades: Trade[]
+): Promise<{ syncedCount: number }> {
+  const path = `users/${userId}/trades`;
+  try {
+    const validTrades = localTrades.filter((trade) => typeof trade.id === 'string' && trade.id.trim());
+    for (let offset = 0; offset < validTrades.length; offset += 450) {
+      const batch = writeBatch(db);
+      for (const trade of validTrades.slice(offset, offset + 450)) {
+        batch.set(doc(db, 'users', userId, 'trades', trade.id), {
+          ...trade,
+          userId,
+          updatedAt: trade.updatedAt || new Date().toISOString(),
+        }, { merge: true });
+      }
+      await batch.commit();
+    }
+    return { syncedCount: validTrades.length };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
 // Reemplaza el conjunto de operaciones de la nube por el conjunto local indicado.
 // Una lista vacía significa borrar todas las operaciones de esa cuenta.
 export async function syncLocalTradesToFirestore(
