@@ -6,6 +6,7 @@ import {
   saveTradesToStorage,
   loadSettingsFromStorage,
   saveSettingsToStorage,
+  LEGACY_SAMPLE_TRADE_IDS,
 } from './utils/storage';
 import {
   signInWithGoogle,
@@ -65,9 +66,16 @@ export default function App() {
           unsubscribeTrades = subscribeToTrades(
             currentUser.uid,
             (remoteTrades) => {
-              // También aceptar la lista vacía para que las operaciones borradas no reaparezcan.
-              setTrades(remoteTrades);
-              saveTradesToStorage(remoteTrades);
+              // Purgar las cuatro operaciones ficticias de versiones anteriores.
+              const sampleIds = new Set<string>(LEGACY_SAMPLE_TRADE_IDS);
+              const cleanTrades = remoteTrades.filter((trade) => !sampleIds.has(trade.id));
+              setTrades(cleanTrades);
+              saveTradesToStorage(cleanTrades);
+              if (cleanTrades.length !== remoteTrades.length) {
+                void syncLocalTradesToFirestore(currentUser.uid, cleanTrades).catch((err) =>
+                  console.error('No se pudieron purgar operaciones ficticias de la nube:', err)
+                );
+              }
               setIsSyncing(false);
             },
             (err) => {
@@ -222,12 +230,6 @@ export default function App() {
     }
   };
 
-  const handleResetToSampleTrades = async () => {
-    // Se conservó el callback de la pantalla de ajustes por compatibilidad,
-    // pero ya no se generan operaciones ficticias.
-    await handleClearAllTrades();
-  };
-
   const handleClearAllTrades = async () => {
     setIsSyncing(true);
     try {
@@ -344,7 +346,6 @@ export default function App() {
               }
             }}
             onRestoreBackup={handleRestoreBackup}
-            onResetToSampleTrades={handleResetToSampleTrades}
             onClearAllTrades={handleClearAllTrades}
             onSignIn={signInWithGoogle}
             onSignOut={signOutUser}
