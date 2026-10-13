@@ -207,7 +207,7 @@ export interface VerificationCase {
     netPnL: number;
     riskPoints: number;
     riskDollars: number;
-    rMultiple: number;
+    rMultiple: number | null;
     outcome: TradeOutcome;
   };
   actual?: {
@@ -358,6 +358,56 @@ export function runFormulaVerificationTests(): VerificationCase[] {
         outcome: 'PERDIDA',
       },
     },
+    {
+      id: 'TEST-5-ZERO-RISK',
+      title: 'Caso 5: Operación con stop inválido en el precio de entrada',
+      description: 'Una operación ganadora tiene el stop inicial en el mismo precio de entrada; el riesgo no debe dividirse entre cero y el múltiplo R debe quedar como N/A.',
+      tradeData: {
+        instrument: 'MNQ',
+        pointValue: 2.0,
+        direction: 'LONG',
+        entries: [{ contracts: 1, price: 20000 }],
+        initialStop: 20000,
+        exitPrice: 20010,
+        commissions: 0,
+      },
+      expected: {
+        totalContracts: 1,
+        weightedAvgPrice: 20000,
+        grossPoints: 10,
+        grossPnL: 20,
+        netPnL: 20,
+        riskPoints: 0,
+        riskDollars: 0,
+        rMultiple: null,
+        outcome: 'GANADORA',
+      },
+    },
+    {
+      id: 'TEST-6-INVALID-ENTRY',
+      title: 'Caso 6: Entradas inválidas sin contratos ni precio',
+      description: 'Las entradas con cero contratos o cero precio deben excluirse de los cálculos y no generar PnL ni riesgo ficticio.',
+      tradeData: {
+        instrument: 'MGC',
+        pointValue: 10.0,
+        direction: 'LONG',
+        entries: [{ contracts: 0, price: 2640 }, { contracts: 1, price: 0 }],
+        initialStop: 0,
+        exitPrice: 0,
+        commissions: 0,
+      },
+      expected: {
+        totalContracts: 0,
+        weightedAvgPrice: 0,
+        grossPoints: 0,
+        grossPnL: 0,
+        netPnL: 0,
+        riskPoints: 0,
+        riskDollars: 0,
+        rMultiple: null,
+        outcome: 'BREAKEVEN',
+      },
+    },
   ];
 
   return cases.map((tc) => {
@@ -435,6 +485,12 @@ export function runFormulaVerificationTests(): VerificationCase[] {
         `Falla en PnL Neto: esperado ${tc.expected.netPnL}, obtenido ${actual.netPnL}`
       );
     }
+    if (Math.abs(actual.riskPoints - tc.expected.riskPoints) > 0.001) {
+      passed = false;
+      notes.push(
+        `Falla en Riesgo en puntos: esperado ${tc.expected.riskPoints}, obtenido ${actual.riskPoints}`
+      );
+    }
     if (Math.abs(actual.riskDollars - tc.expected.riskDollars) > 0.01) {
       passed = false;
       notes.push(
@@ -442,8 +498,9 @@ export function runFormulaVerificationTests(): VerificationCase[] {
       );
     }
     if (
-      actual.rMultiple === null ||
-      Math.abs(actual.rMultiple - tc.expected.rMultiple) > 0.02
+      (tc.expected.rMultiple === null && actual.rMultiple !== null) ||
+      (tc.expected.rMultiple !== null &&
+        (actual.rMultiple === null || Math.abs(actual.rMultiple - tc.expected.rMultiple) > 0.02))
     ) {
       passed = false;
       notes.push(
