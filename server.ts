@@ -24,6 +24,11 @@ app.use('/api/coach', (req, res, next) => {
   if (!entry || entry.resetAt <= now) entry = { count: 0, resetAt: now + AUTH_RATE_WINDOW_MS };
   entry.count += 1;
   authRequestCounts.set(key, entry);
+  if (authRequestCounts.size > 5000) {
+    for (const [ip, value] of authRequestCounts) {
+      if (value.resetAt <= now) authRequestCounts.delete(ip);
+    }
+  }
   if (entry.count > AUTH_RATE_LIMIT) {
     res.setHeader('Retry-After', String(Math.ceil((entry.resetAt - now) / 1000)));
     res.status(429).json({ error: 'Demasiadas solicitudes. Espera unos minutos e inténtalo de nuevo.' });
