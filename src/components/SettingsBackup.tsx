@@ -161,7 +161,7 @@ export const SettingsBackup: React.FC<SettingsBackupProps> = ({
                       setSyncMessage(null);
                       try {
                         await onSyncLocalToCloud();
-                        setSyncMessage('La colección de Firebase fue reemplazada por las operaciones locales.');
+                        setSyncMessage('Las operaciones locales se agregaron o actualizaron en Firebase sin borrar las operaciones que solo están en la nube.');
                         setTimeout(() => setSyncMessage(null), 3500);
                       } catch (err: any) {
                         setSyncMessage('Error al sincronizar: ' + (err.message || 'Intente nuevamente'));
